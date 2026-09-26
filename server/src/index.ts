@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import {
+  addChatMessage,
   controlVideo,
   createRoom,
   joinRoom,
   leaveRoom,
   setVideo,
+  type ChatMessage,
   type Member,
   type VideoState,
 } from "./rooms.js";
@@ -15,9 +17,11 @@ const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
 const MAX_NAME_LENGTH = 24;
 const MAX_VIDEO_POSITION = 24 * 60 * 60;
+const MAX_CHAT_LENGTH = 300;
+const CHAT_MIN_INTERVAL_MS = 1500;
 
 type JoinResult =
-  | { ok: true; code: string; members: Member[]; video: VideoState }
+  | { ok: true; code: string; members: Member[]; video: VideoState; chat: ChatMessage[] }
   | { ok: false; error: string };
 
 type AckResult = { ok: true } | { ok: false; error: string };
@@ -58,7 +62,7 @@ io.on("connection", (socket) => {
     const { code, video } = createRoom(me);
     socket.data.roomCode = code;
     socket.join(code);
-    ack({ ok: true, code, members: [me], video });
+    ack({ ok: true, code, members: [me], video, chat: [] });
   });
 
   socket.on(
@@ -76,7 +80,13 @@ io.on("connection", (socket) => {
 
       socket.data.roomCode = code;
       socket.join(code);
-      ack({ ok: true, code, members: joined.members, video: joined.video });
+      ack({
+        ok: true,
+        code,
+        members: joined.members,
+        video: joined.video,
+        chat: joined.chat,
+      });
       socket.to(code).emit("room:presence", joined.members);
     },
   );
@@ -109,6 +119,32 @@ io.on("connection", (socket) => {
 
     const state = controlVideo(code, action, position);
     if (state) io.to(code).emit("video:state", state);
+  });
+
+  socket.on("chat:send", (rawText: unknown, ack: (res: AckResult) => void) => {
+    if (typeof ack !== "function") return;
+    const code: string | undefined = socket.data.roomCode;
+    if (!code) return ack({ ok: false, error: "Not in a room" });
+    if (typeof rawText !== "string") return ack({ ok: false, error: "Invalid message" });
+
+    const now = Date.now();
+    const lastChatAt: number = socket.data.lastChatAt ?? 0;
+    if (now - lastChatAt < CHAT_MIN_INTERVAL_MS) {
+      return ack({ ok: false, error: "You're sending messages too fast" });
+    }
+
+    const text = rawText.trim();
+    if (text.length === 0) return ack({ ok: false, error: "Message is empty" });
+    if (text.length > MAX_CHAT_LENGTH) {
+      return ack({ ok: false, error: `Message is too long (max ${MAX_CHAT_LENGTH} characters)` });
+    }
+
+    const message = addChatMessage(code, socket.id, text);
+    if (!message) return ack({ ok: false, error: "Room not found" });
+
+    socket.data.lastChatAt = now;
+    io.to(code).emit("chat:message", message);
+    ack({ ok: true });
   });
 
   socket.on("disconnect", (reason) => {
