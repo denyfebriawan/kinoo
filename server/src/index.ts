@@ -1,14 +1,26 @@
 import { createServer } from "node:http";
 import { Server, type Socket } from "socket.io";
-import { createRoom, joinRoom, leaveRoom, type Member } from "./rooms.js";
+import {
+  controlVideo,
+  createRoom,
+  joinRoom,
+  leaveRoom,
+  setVideo,
+  type Member,
+  type VideoState,
+} from "./rooms.js";
+import { parseYouTubeId } from "./youtube.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
 const MAX_NAME_LENGTH = 24;
+const MAX_VIDEO_POSITION = 24 * 60 * 60;
 
 type JoinResult =
-  | { ok: true; code: string; members: Member[] }
+  | { ok: true; code: string; members: Member[]; video: VideoState }
   | { ok: false; error: string };
+
+type AckResult = { ok: true } | { ok: false; error: string };
 
 function cleanName(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -39,14 +51,14 @@ io.on("connection", (socket) => {
   socket.on("room:create", (rawName: unknown, ack: (res: JoinResult) => void) => {
     if (typeof ack !== "function") return;
     const name = cleanName(rawName);
-    if (!name) return ack({ ok: false, error: "Invalid display name" });
+    if (!name) return ack({ ok: false, error: "Enter a display name (up to 24 characters)" });
 
     leaveCurrentRoom(socket);
     const me: Member = { id: socket.id, name };
-    const code = createRoom(me);
+    const { code, video } = createRoom(me);
     socket.data.roomCode = code;
     socket.join(code);
-    ack({ ok: true, code, members: [me] });
+    ack({ ok: true, code, members: [me], video });
   });
 
   socket.on(
@@ -54,23 +66,49 @@ io.on("connection", (socket) => {
     (rawCode: unknown, rawName: unknown, ack: (res: JoinResult) => void) => {
       if (typeof ack !== "function") return;
       const name = cleanName(rawName);
-      if (!name) return ack({ ok: false, error: "Invalid display name" });
+      if (!name) return ack({ ok: false, error: "Enter a display name (up to 24 characters)" });
       if (typeof rawCode !== "string") return ack({ ok: false, error: "Invalid room code" });
 
       leaveCurrentRoom(socket);
       const code = rawCode.trim().toUpperCase();
-      const members = joinRoom(code, { id: socket.id, name });
-      if (!members) return ack({ ok: false, error: "Room not found" });
+      const joined = joinRoom(code, { id: socket.id, name });
+      if (!joined) return ack({ ok: false, error: "Room not found" });
 
       socket.data.roomCode = code;
       socket.join(code);
-      ack({ ok: true, code, members });
-      socket.to(code).emit("room:presence", members);
+      ack({ ok: true, code, members: joined.members, video: joined.video });
+      socket.to(code).emit("room:presence", joined.members);
     },
   );
 
   socket.on("room:leave", () => {
     leaveCurrentRoom(socket);
+  });
+
+  socket.on("video:set", (rawUrl: unknown, ack: (res: AckResult) => void) => {
+    if (typeof ack !== "function") return;
+    const code: string | undefined = socket.data.roomCode;
+    if (!code) return ack({ ok: false, error: "Not in a room" });
+    if (typeof rawUrl !== "string") return ack({ ok: false, error: "Invalid video link" });
+
+    const videoId = parseYouTubeId(rawUrl);
+    if (!videoId) return ack({ ok: false, error: "That doesn't look like a YouTube link" });
+
+    const state = setVideo(code, videoId);
+    if (!state) return ack({ ok: false, error: "Room not found" });
+    io.to(code).emit("video:state", state);
+    ack({ ok: true });
+  });
+
+  socket.on("video:control", (action: unknown, position: unknown) => {
+    const code: string | undefined = socket.data.roomCode;
+    if (!code) return;
+    if (action !== "play" && action !== "pause" && action !== "seek") return;
+    if (typeof position !== "number" || !Number.isFinite(position)) return;
+    if (position < 0 || position > MAX_VIDEO_POSITION) return;
+
+    const state = controlVideo(code, action, position);
+    if (state) io.to(code).emit("video:state", state);
   });
 
   socket.on("disconnect", (reason) => {
