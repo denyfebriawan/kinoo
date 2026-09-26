@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useRoom } from "@/components/room-provider";
+import ChatPanel from "@/components/chat-panel";
 import VideoPlayer from "@/components/video-player";
 import { inputClass, primaryButtonClass, secondaryButtonClass } from "@/lib/styles";
 
@@ -90,6 +91,8 @@ export default function RoomView({ code }: { code: string }) {
               ))}
             </ul>
           </div>
+
+          <ChatPanel />
 
           <button type="button" className={secondaryButtonClass} onClick={handleLeave}>
             Leave room

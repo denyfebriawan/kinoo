@@ -1,8 +1,16 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 export interface Member {
   id: string;
   name: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  authorId: string;
+  author: string;
+  text: string;
+  sentAt: number;
 }
 
 export interface VideoState {
@@ -21,10 +29,12 @@ interface Room {
   code: string;
   members: Map<string, Member>;
   video: StoredVideo;
+  chat: ChatMessage[];
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
+const MAX_CHAT_HISTORY = 50;
 
 const rooms = new Map<string, Room>();
 
@@ -51,6 +61,7 @@ export function createRoom(creator: Member): { code: string; video: VideoState }
     code,
     members: new Map([[creator.id, creator]]),
     video: { videoId: null, playing: false, position: 0, updatedAt: Date.now() },
+    chat: [],
   };
   rooms.set(code, room);
   return { code, video: currentVideoState(room) };
@@ -59,11 +70,38 @@ export function createRoom(creator: Member): { code: string; video: VideoState }
 export function joinRoom(
   code: string,
   member: Member,
-): { members: Member[]; video: VideoState } | undefined {
+): { members: Member[]; video: VideoState; chat: ChatMessage[] } | undefined {
   const room = rooms.get(code);
   if (!room) return undefined;
   room.members.set(member.id, member);
-  return { members: Array.from(room.members.values()), video: currentVideoState(room) };
+  return {
+    members: Array.from(room.members.values()),
+    video: currentVideoState(room),
+    chat: [...room.chat],
+  };
+}
+
+export function addChatMessage(
+  code: string,
+  memberId: string,
+  text: string,
+): ChatMessage | undefined {
+  const room = rooms.get(code);
+  const member = room?.members.get(memberId);
+  if (!room || !member) return undefined;
+
+  const message: ChatMessage = {
+    id: randomUUID(),
+    authorId: member.id,
+    author: member.name,
+    text,
+    sentAt: Date.now(),
+  };
+  room.chat.push(message);
+  if (room.chat.length > MAX_CHAT_HISTORY) {
+    room.chat.splice(0, room.chat.length - MAX_CHAT_HISTORY);
+  }
+  return message;
 }
 
 export function leaveRoom(code: string, memberId: string): Member[] {

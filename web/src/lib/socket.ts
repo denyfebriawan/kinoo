@@ -13,8 +13,16 @@ export interface VideoState {
 
 export type VideoAction = "play" | "pause" | "seek";
 
+export interface ChatMessage {
+  id: string;
+  authorId: string;
+  author: string;
+  text: string;
+  sentAt: number;
+}
+
 export type JoinResult =
-  | { ok: true; code: string; members: Member[]; video: VideoState }
+  | { ok: true; code: string; members: Member[]; video: VideoState; chat: ChatMessage[] }
   | { ok: false; error: string };
 
 export type AckResult = { ok: true } | { ok: false; error: string };
