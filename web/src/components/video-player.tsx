@@ -69,7 +69,7 @@ function applyServerState(player: YT.Player, video: SyncedVideo, local: LocalPla
   rebase(local, needsSeek ? target : current, video.playing);
 }
 
-export default function VideoPlayer() {
+export default function VideoPlayer({ fill = false }: { fill?: boolean }) {
   const { room, controlVideo, reportPosition } = useRoom();
   const video = room?.video;
 
@@ -166,7 +166,7 @@ export default function VideoPlayer() {
           width: "100%",
           height: "100%",
           videoId: initial?.videoId ?? undefined,
-          playerVars: { playsinline: 1, rel: 0 },
+          playerVars: { playsinline: 1, rel: 0, fs: document.fullscreenEnabled ? 0 : 1 },
           events: {
             onReady: () => {
               if (cancelled) return;
@@ -199,10 +199,14 @@ export default function VideoPlayer() {
   }, [video]);
 
   return (
-    <div>
+    <div className={fill ? "h-full w-full" : ""}>
       <div
         ref={containerRef}
-        className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl shadow-black/50 ring-1 ring-line"
+        className={
+          fill
+            ? "h-full w-full bg-black"
+            : "mx-auto aspect-video w-full max-w-[138vh] overflow-hidden rounded-xl bg-black shadow-2xl shadow-black/50 ring-1 ring-line"
+        }
       />
       {failed && (
         <p role="alert" className="mt-2 text-sm text-danger">
