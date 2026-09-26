@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { Server } from "socket.io";
+import { Server, type Socket } from "socket.io";
 import { createRoom, joinRoom, leaveRoom, type Member } from "./rooms.js";
 
 const PORT = Number(process.env.PORT) || 4000;
@@ -23,6 +23,16 @@ const io = new Server(httpServer, {
   cors: { origin: CLIENT_ORIGIN },
 });
 
+function leaveCurrentRoom(socket: Socket): void {
+  const code: string | undefined = socket.data.roomCode;
+  if (!code) return;
+
+  socket.data.roomCode = undefined;
+  socket.leave(code);
+  const members = leaveRoom(code, socket.id);
+  io.to(code).emit("room:presence", members);
+}
+
 io.on("connection", (socket) => {
   console.log(`connected: ${socket.id}`);
 
@@ -30,8 +40,8 @@ io.on("connection", (socket) => {
     if (typeof ack !== "function") return;
     const name = cleanName(rawName);
     if (!name) return ack({ ok: false, error: "Invalid display name" });
-    if (socket.data.roomCode) return ack({ ok: false, error: "Already in a room" });
 
+    leaveCurrentRoom(socket);
     const me: Member = { id: socket.id, name };
     const code = createRoom(me);
     socket.data.roomCode = code;
@@ -46,8 +56,8 @@ io.on("connection", (socket) => {
       const name = cleanName(rawName);
       if (!name) return ack({ ok: false, error: "Invalid display name" });
       if (typeof rawCode !== "string") return ack({ ok: false, error: "Invalid room code" });
-      if (socket.data.roomCode) return ack({ ok: false, error: "Already in a room" });
 
+      leaveCurrentRoom(socket);
       const code = rawCode.trim().toUpperCase();
       const members = joinRoom(code, { id: socket.id, name });
       if (!members) return ack({ ok: false, error: "Room not found" });
@@ -59,13 +69,13 @@ io.on("connection", (socket) => {
     },
   );
 
+  socket.on("room:leave", () => {
+    leaveCurrentRoom(socket);
+  });
+
   socket.on("disconnect", (reason) => {
     console.log(`disconnected: ${socket.id} (${reason})`);
-
-    const code: string | undefined = socket.data.roomCode;
-    if (!code) return;
-    const members = leaveRoom(code, socket.id);
-    io.to(code).emit("room:presence", members);
+    leaveCurrentRoom(socket);
   });
 });
 
