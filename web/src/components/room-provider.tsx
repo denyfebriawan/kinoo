@@ -23,7 +23,7 @@ export interface SyncedVideo extends VideoState {
   receivedAt: number;
 }
 
-interface Room {
+export interface Room {
   code: string;
   members: Member[];
   selfId: string;
@@ -31,7 +31,10 @@ interface Room {
   chat: ChatMessage[];
 }
 
+export type ConnectionStatus = "connecting" | "connected" | "offline";
+
 interface RoomContextValue {
+  status: ConnectionStatus;
   room: Room | null;
   createRoom: (name: string) => Promise<JoinResult>;
   joinRoom: (code: string, name: string) => Promise<JoinResult>;
@@ -46,8 +49,17 @@ const RoomContext = createContext<RoomContextValue | null>(null);
 
 export function RoomProvider({ children }: { children: ReactNode }) {
   const [room, setRoom] = useState<Room | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>("connecting");
 
   useEffect(() => {
+    function handleConnect() {
+      setStatus("connected");
+    }
+
+    function handleConnectError() {
+      setStatus("offline");
+    }
+
     function handlePresence(members: Member[]) {
       setRoom((current) => (current ? { ...current, members } : current));
     }
@@ -66,9 +78,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
 
     function handleDisconnect() {
+      setStatus("offline");
       setRoom(null);
     }
 
+    socket.on("connect", handleConnect);
+    socket.on("connect_error", handleConnectError);
     socket.on("room:presence", handlePresence);
     socket.on("video:state", handleVideoState);
     socket.on("chat:message", handleChatMessage);
@@ -76,6 +91,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     socket.connect();
 
     return () => {
+      socket.off("connect", handleConnect);
+      socket.off("connect_error", handleConnectError);
       socket.off("room:presence", handlePresence);
       socket.off("video:state", handleVideoState);
       socket.off("chat:message", handleChatMessage);
@@ -144,6 +161,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   return (
     <RoomContext.Provider
       value={{
+        status,
         room,
         createRoom,
         joinRoom,

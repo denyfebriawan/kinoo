@@ -202,10 +202,10 @@ export default function VideoPlayer() {
     <div>
       <div
         ref={containerRef}
-        className="aspect-video w-full overflow-hidden rounded-lg bg-black"
+        className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl shadow-black/50 ring-1 ring-line"
       />
       {failed && (
-        <p className="mt-2 text-sm text-red-600">
+        <p role="alert" className="mt-2 text-sm text-danger">
           Couldn&apos;t load the YouTube player. Check your connection or ad blocker.
         </p>
       )}
