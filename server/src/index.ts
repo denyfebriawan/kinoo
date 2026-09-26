@@ -15,7 +15,11 @@ import {
 import { parseYouTubeId } from "./youtube.js";
 
 const PORT = Number(process.env.PORT) || 4000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
+const HOST = process.env.HOST;
+const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN ?? "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const MAX_NAME_LENGTH = 24;
 const MAX_VIDEO_POSITION = 24 * 60 * 60;
 const DRIFT_THRESHOLD_SECONDS = 1.5;
@@ -39,7 +43,7 @@ function cleanName(raw: unknown): string | null {
 const httpServer = createServer();
 
 const io = new Server(httpServer, {
-  cors: { origin: CLIENT_ORIGIN },
+  cors: { origin: CLIENT_ORIGINS },
 });
 
 function leaveCurrentRoom(socket: Socket): void {
@@ -174,6 +178,7 @@ io.on("connection", (socket) => {
   });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Socket.io server listening on port ${PORT}`);
+httpServer.listen({ port: PORT, host: HOST }, () => {
+  console.log(`Socket.io server listening on ${HOST ?? "all interfaces"}:${PORT}`);
+  console.log(`Allowed origins: ${CLIENT_ORIGINS.join(", ")}`);
 });

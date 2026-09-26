@@ -1,0 +1,16 @@
+[Unit]
+Description=Kinoo Socket.io server
+After=network.target
+
+[Service]
+Type=simple
+User=kinoo
+WorkingDirectory=/opt/kinoo/server
+EnvironmentFile=/etc/kinoo/server.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
