@@ -115,6 +115,11 @@ export function leaveRoom(code: string, memberId: string): Member[] {
   return Array.from(room.members.values());
 }
 
+export function getVideoState(code: string): VideoState | undefined {
+  const room = rooms.get(code);
+  return room ? currentVideoState(room) : undefined;
+}
+
 export function setVideo(code: string, videoId: string): VideoState | undefined {
   const room = rooms.get(code);
   if (!room) return undefined;

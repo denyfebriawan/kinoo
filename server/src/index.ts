@@ -4,6 +4,7 @@ import {
   addChatMessage,
   controlVideo,
   createRoom,
+  getVideoState,
   joinRoom,
   leaveRoom,
   setVideo,
@@ -17,6 +18,8 @@ const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
 const MAX_NAME_LENGTH = 24;
 const MAX_VIDEO_POSITION = 24 * 60 * 60;
+const DRIFT_THRESHOLD_SECONDS = 1.5;
+const MIN_REPORT_INTERVAL_MS = 1000;
 const MAX_CHAT_LENGTH = 300;
 const CHAT_MIN_INTERVAL_MS = 1500;
 
@@ -119,6 +122,24 @@ io.on("connection", (socket) => {
 
     const state = controlVideo(code, action, position);
     if (state) io.to(code).emit("video:state", state);
+  });
+
+  socket.on("video:report", (position: unknown) => {
+    const code: string | undefined = socket.data.roomCode;
+    if (!code) return;
+    if (typeof position !== "number" || !Number.isFinite(position)) return;
+    if (position < 0 || position > MAX_VIDEO_POSITION) return;
+
+    const now = Date.now();
+    const lastReportAt: number = socket.data.lastReportAt ?? 0;
+    if (now - lastReportAt < MIN_REPORT_INTERVAL_MS) return;
+    socket.data.lastReportAt = now;
+
+    const expected = getVideoState(code);
+    if (!expected || expected.videoId === null) return;
+    if (Math.abs(expected.position - position) > DRIFT_THRESHOLD_SECONDS) {
+      socket.emit("video:state", expected);
+    }
   });
 
   socket.on("chat:send", (rawText: unknown, ack: (res: AckResult) => void) => {

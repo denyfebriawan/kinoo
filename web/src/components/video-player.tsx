@@ -8,6 +8,7 @@ const POLL_INTERVAL_MS = 500;
 const SEEK_JUMP_SECONDS = 1.5;
 const APPLY_TOLERANCE_SECONDS = 0.75;
 const IGNORE_AFTER_COMMAND_MS = 1000;
+const REPORT_INTERVAL_MS = 3000;
 
 interface LocalPlayback {
   loadedVideoId: string | null;
@@ -15,6 +16,7 @@ interface LocalPlayback {
   at: number;
   playing: boolean;
   ignoreUntil: number;
+  lastReportAt: number;
 }
 
 function expectedPosition(video: SyncedVideo): number {
@@ -68,25 +70,28 @@ function applyServerState(player: YT.Player, video: SyncedVideo, local: LocalPla
 }
 
 export default function VideoPlayer() {
-  const { room, controlVideo } = useRoom();
+  const { room, controlVideo, reportPosition } = useRoom();
   const video = room?.video;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const videoRef = useRef(video);
   const controlRef = useRef(controlVideo);
+  const reportRef = useRef(reportPosition);
   const localRef = useRef<LocalPlayback>({
     loadedVideoId: null,
     time: 0,
     at: 0,
     playing: false,
     ignoreUntil: 0,
+    lastReportAt: 0,
   });
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     videoRef.current = video;
     controlRef.current = controlVideo;
+    reportRef.current = reportPosition;
   });
 
   useEffect(() => {
@@ -141,6 +146,14 @@ export default function VideoPlayer() {
       const state = player.getPlayerState();
       if (state !== YT.PlayerState.BUFFERING) checkForUserSeek(player);
       rebase(local, player.getCurrentTime(), state === YT.PlayerState.PLAYING);
+
+      const now = Date.now();
+      const isSteady =
+        state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED;
+      if (isSteady && now > local.ignoreUntil && now - local.lastReportAt >= REPORT_INTERVAL_MS) {
+        local.lastReportAt = now;
+        reportRef.current(player.getCurrentTime());
+      }
     }
 
     loadYouTubeApi()
