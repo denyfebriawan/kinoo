@@ -13,6 +13,8 @@ export default function HomeForm() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const hasName = name.trim().length > 0;
+  const hasCode = code.trim().length > 0;
 
   async function run(action: () => Promise<JoinResult>) {
     setBusy(true);
@@ -45,7 +47,12 @@ export default function HomeForm() {
         onChange={(event) => setName(event.target.value)}
       />
 
-      <button type="button" className={primaryButtonClass} disabled={busy} onClick={handleCreate}>
+      <button
+        type="button"
+        className={primaryButtonClass}
+        disabled={busy || !hasName}
+        onClick={handleCreate}
+      >
         Create a room
       </button>
 
@@ -59,10 +66,18 @@ export default function HomeForm() {
           value={code}
           onChange={(event) => setCode(event.target.value)}
         />
-        <button type="submit" className={secondaryButtonClass} disabled={busy}>
+        <button
+          type="submit"
+          className={secondaryButtonClass}
+          disabled={busy || !hasName || !hasCode}
+        >
           Join
         </button>
       </div>
+
+      {!hasName && (
+        <p className="text-center text-sm text-zinc-500">Enter a display name to continue.</p>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
     </form>

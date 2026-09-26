@@ -7,12 +7,24 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { socket, type JoinResult, type Member } from "@/lib/socket";
+import {
+  socket,
+  type AckResult,
+  type JoinResult,
+  type Member,
+  type VideoAction,
+  type VideoState,
+} from "@/lib/socket";
+
+export interface SyncedVideo extends VideoState {
+  receivedAt: number;
+}
 
 interface Room {
   code: string;
   members: Member[];
   selfId: string;
+  video: SyncedVideo;
 }
 
 interface RoomContextValue {
@@ -20,6 +32,8 @@ interface RoomContextValue {
   createRoom: (name: string) => Promise<JoinResult>;
   joinRoom: (code: string, name: string) => Promise<JoinResult>;
   leaveRoom: () => void;
+  setVideo: (url: string) => Promise<AckResult>;
+  controlVideo: (action: VideoAction, position: number) => void;
 }
 
 const RoomContext = createContext<RoomContextValue | null>(null);
@@ -32,16 +46,23 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       setRoom((current) => (current ? { ...current, members } : current));
     }
 
+    function handleVideoState(state: VideoState) {
+      const video: SyncedVideo = { ...state, receivedAt: Date.now() };
+      setRoom((current) => (current ? { ...current, video } : current));
+    }
+
     function handleDisconnect() {
       setRoom(null);
     }
 
     socket.on("room:presence", handlePresence);
+    socket.on("video:state", handleVideoState);
     socket.on("disconnect", handleDisconnect);
     socket.connect();
 
     return () => {
       socket.off("room:presence", handlePresence);
+      socket.off("video:state", handleVideoState);
       socket.off("disconnect", handleDisconnect);
       socket.disconnect();
     };
@@ -51,7 +72,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     try {
       const result: JoinResult = await socket.timeout(5000).emitWithAck(event, ...args);
       if (result.ok) {
-        setRoom({ code: result.code, members: result.members, selfId: socket.id ?? "" });
+        setRoom({
+          code: result.code,
+          members: result.members,
+          selfId: socket.id ?? "",
+          video: { ...result.video, receivedAt: Date.now() },
+        });
       }
       return result;
     } catch {
@@ -72,8 +98,23 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setRoom(null);
   }
 
+  async function setVideo(url: string): Promise<AckResult> {
+    try {
+      const result: AckResult = await socket.timeout(5000).emitWithAck("video:set", url);
+      return result;
+    } catch {
+      return { ok: false, error: "Could not reach the server" };
+    }
+  }
+
+  function controlVideo(action: VideoAction, position: number) {
+    socket.emit("video:control", action, position);
+  }
+
   return (
-    <RoomContext.Provider value={{ room, createRoom, joinRoom, leaveRoom }}>
+    <RoomContext.Provider
+      value={{ room, createRoom, joinRoom, leaveRoom, setVideo, controlVideo }}
+    >
       {children}
     </RoomContext.Provider>
   );
