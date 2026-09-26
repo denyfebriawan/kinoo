@@ -20,6 +20,7 @@ export default function ChatPanel() {
   const stickToBottom = useRef(true);
 
   const messages = room?.chat ?? [];
+  const [initialIds] = useState(() => new Set(messages.map((message) => message.id)));
 
   useEffect(() => {
     const list = listRef.current;
@@ -71,7 +72,7 @@ export default function ChatPanel() {
           return (
             <li
               key={message.id}
-              className={`flex max-w-[88%] flex-col ${isOwn ? "items-end self-end" : "items-start self-start"} ${startsGroup && index > 0 ? "mt-2" : ""}`}
+              className={`flex max-w-[88%] flex-col ${isOwn ? "items-end self-end" : "items-start self-start"} ${startsGroup && index > 0 ? "mt-2" : ""} ${initialIds.has(message.id) ? "" : "motion-safe:animate-pop-in"}`}
             >
               {startsGroup && !isOwn && (
                 <span className="mb-0.5 px-1 text-xs font-medium text-muted">
