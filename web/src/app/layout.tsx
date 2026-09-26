@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { RoomProvider } from "@/components/room-provider";
+import SiteHeader from "@/components/site-header";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,8 +15,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kinoo",
-  description: "Watch YouTube videos together, in sync, with live chat.",
+  title: "Kinoo — watch YouTube together, in sync",
+  description:
+    "Create a room, share the link, and watch the same YouTube video in perfect sync with live chat. No sign-up.",
+  openGraph: {
+    title: "Kinoo — watch YouTube together, in sync",
+    description:
+      "Create a room, share the link, and watch the same YouTube video in perfect sync with live chat.",
+    type: "website",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0f",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -24,8 +37,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <RoomProvider>{children}</RoomProvider>
+      <body className="min-h-full flex flex-col font-sans">
+        <RoomProvider>
+          <SiteHeader />
+          {children}
+        </RoomProvider>
       </body>
     </html>
   );
