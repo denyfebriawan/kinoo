@@ -38,6 +38,7 @@ interface RoomContextValue {
   leaveRoom: () => void;
   setVideo: (url: string) => Promise<AckResult>;
   controlVideo: (action: VideoAction, position: number) => void;
+  reportPosition: (position: number) => void;
   sendChat: (text: string) => Promise<AckResult>;
 }
 
@@ -127,6 +128,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     socket.emit("video:control", action, position);
   }
 
+  function reportPosition(position: number) {
+    socket.emit("video:report", position);
+  }
+
   async function sendChat(text: string): Promise<AckResult> {
     try {
       const result: AckResult = await socket.timeout(5000).emitWithAck("chat:send", text);
@@ -138,7 +143,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   return (
     <RoomContext.Provider
-      value={{ room, createRoom, joinRoom, leaveRoom, setVideo, controlVideo, sendChat }}
+      value={{
+        room,
+        createRoom,
+        joinRoom,
+        leaveRoom,
+        setVideo,
+        controlVideo,
+        reportPosition,
+        sendChat,
+      }}
     >
       {children}
     </RoomContext.Provider>
